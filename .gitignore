@@ -1,0 +1,9 @@
+# File segreti e di sistema 
+.env
+.DS_Store
+
+# Cartelle spazzatura di Python
+__pycache__/
+*.pyc
+venv/
+.venv/

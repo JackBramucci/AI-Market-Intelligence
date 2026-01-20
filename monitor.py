@@ -1,87 +1,77 @@
 import os
 import requests
 from bs4 import BeautifulSoup
-import google.generativeai as genai
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
-# --- CONFIGURAZIONE ---
+# --- 1. CONFIGURAZIONE SICURA ---
 load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
 
 if not api_key:
-    print("ERRORE: Chiave API mancante nel file .env")
+    print("❌ ERRORE: Chiave API non trovata.")
     exit()
 
-genai.configure(api_key=api_key)
+# Inizializzazione Client (Nuova SDK)
+client = genai.Client(api_key=api_key)
 
-def scarica_news_tech():
-    """Scarica i titoli in tempo reale da Hacker News."""
-    url = "https://news.ycombinator.com/"
-    print(f"--- 📡 Collegamento al satellite (Scraping {url})... ---")
-    
+# --- 2. MODULO INTELLIGENCE (RACCOLTA DATI) ---
+def scarica_hacker_news():
+    print("📡 Collegamento al satellite (Scraping https://news.ycombinator.com/)...")
     try:
-        # 1. Chiamata al sito
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            print(f"Errore connessione: {response.status_code}")
-            return []
+        response = requests.get("https://news.ycombinator.com/", timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
         
-        # 2. Pulizia HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # 3. Estrazione Titoli (Hacker News usa la classe 'titleline')
+        # Estrai i titoli
         titoli = []
-        elementi = soup.find_all(class_='titleline')
-        
-        for el in elementi:
-            titolo_pulito = el.get_text()
-            titoli.append(titolo_pulito)
+        news_items = soup.find_all("span", class_="titleline")
+        for item in news_items[:15]: # Prendiamo i primi 15 top trend
+            titoli.append(item.get_text())
             
         print(f"✅ Intercettati {len(titoli)} segnali dal web.")
-        return titoli[:40] # Prendiamo i primi 40 titoli
-
+        return "\n".join(titoli)
     except Exception as e:
-        print(f"❌ Errore nello scraping: {e}")
-        return []
+        print(f"❌ Errore durante lo scraping: {e}")
+        return None
 
-def analista_ai(lista_titoli):
-    """Usa Gemini per filtrare il rumore e trovare opportunità."""
-    print("\n--- 🧠 Avvio Analisi Intelligence (Gemini 2.0) ---")
-    
-    # Creiamo un blocco di testo unico da inviare all'AI
-    testo_grezzo = "\n".join([f"- {t}" for t in lista_titoli])
-    
-    model = genai.GenerativeModel('gemini-2.0-flash')
+# --- 3. MODULO ANALISI (GEMINI 2.0) ---
+def analizza_segnali(testo_input):
+    print("\n🧠 Avvio Analisi Intelligence (Gemini 2.0)...")
     
     prompt = f"""
-    Sei un Analista di Strategia Industriale.
-    Ho scaricato questi titoli dal web in tempo reale.
+    Agisci come un analista di intelligence tecnologica di alto livello.
+    Analizza questi titoli presi ora da Hacker News:
     
-    LISTA NEWS:
-    {testo_grezzo}
-    
-    OBIETTIVO:
-    Identifica SE ci sono notizie riguardanti:
-    1. ENERGIA (Nucleare, Rinnovabili, Batterie, Oil&Gas)
-    2. INTELLIGENZA ARTIFICIALE applicata (non gossip, ma nuovi modelli o strumenti)
-    3. HARDWARE (Chip, Processori, Robotica)
+    {testo_input}
     
     OUTPUT RICHIESTO:
-    Se trovi notizie rilevanti, elencale e spiega in una frase perché sono strategiche.
-    Se NON trovi nulla di specifico, dimmi qual è il "Trend del Giorno" (di cosa parlano tutti?).
+    1. Identifica il "Trend Dominante" in una frase.
+    2. Evidenzia 3 notizie critiche che potrebbero avere impatto sul mercato o sulla tecnologia.
+    3. Usa un tono professionale, sintetico e diretto (in Italiano).
     """
-    
-    try:
-        response = model.generate_content(prompt)
-        print("\n" + "="*50)
-        print("📊 REPORT INTELLIGENCE DI MERCATO")
-        print("="*50)
-        print(response.text)
-    except Exception as e:
-        print(f"Errore AI: {e}")
 
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        return f"❌ Errore AI: {e}"
+
+# --- 4. ESECUZIONE ---
 if __name__ == "__main__":
-    # Esecuzione sequenziale
-    notizie = scarica_news_tech()
-    if notizie:
-        analista_ai(notizie)
+    raw_data = scarica_hacker_news()
+    
+    if raw_data:
+        report = analizza_segnali(raw_data)
+        print("\n" + "="*40)
+        print("📄 REPORT INTELLIGENCE")
+        print("="*40)
+        print(report)
+        print("="*40)
+    else:
+        print("⚠️ Nessun dato da analizzare.")
+    
